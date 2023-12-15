@@ -1,92 +1,97 @@
-const express = require('express');
+const express = require("express");
+const bodyParser = require("body-parser");
 const cors = require('cors');
-const DataStore = require('js-data');
-const { v4: uuidv4 } = require('uuid');
+import imageUrl from "./src/catalog-fridge.jpg";
 
 const app = express();
-
+app.use(bodyParser.json());
 app.use(cors());
-app.use(express.json());
 
-// Define Fridge model with properties and ID generation
-const store = new DataStore();
-const Fridge = store.define('Fridge', {
-  id: {
-    type: String,
-    default: uuidv4,
+// Initial Fridge Data
+const fridges = [
+  {
+    id: 1,
+    name: "Fridge 1",
+    brand: "Samsung",
+    price: 25,
+    imageUrl,
+    description: "Description for Fridge 1",
   },
-  name: String,
-  brand: String,
-  color: String,
-  price: Number,
-});
 
-// Pre-populate with some initial data (optional)
-const initialFridges = [
-  { name: 'Samsung RF28H5000SG', brand: 'Samsung', color: 'Stainless Steel', price: 1599 },
-  { name: 'LG LFXS30766S/S', brand: 'LG', color: 'Black Stainless Steel', price: 2499 },
+  {
+    id: 2,
+    name: "Fridge 2",
+    brand: "LG",
+    price: 20,
+    imageUrl,
+    description: "Description for Fridge 2",
+  },
+  {
+    id: 3,
+    name: "Fridge 3",
+    brand: "LG",
+    price: 38,
+    imageUrl,
+    description: "Description for Fridge 3",
+  },
+  {
+    id: 4,
+    name: "Fridge 4",
+    brand: "Samsung",
+    price: 17,
+    imageUrl,
+    description: "Description for Fridge 4",
+  },
 ];
 
-Fridge.create(initialFridges)
-  .then(() => console.log('Initial fridges added'))
-  .catch((error) => console.error(error));
+// GET /fridges
+app.get("/fridges", async (req, res) => {
+  const brands = req.query.brands ? req.query.brands.split(",") : [];
+  const priceFrom = parseFloat(req.query.priceFrom) || undefined;
+  const priceTo = parseFloat(req.query.priceTo) || undefined;
+  const searchTerm = req.query.searchTerm || "";
+  const itemId = parseInt(req.params.id);
+  const foundItem = fridges.find((fridge) => fridge.id === itemId);
 
-// Get all fridges
-app.get('/fridges', async (req, res) => {
-  try {
-    const fridges = await Fridge.findAll();
-    res.json(fridges);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  let results = [...fridges];
+
+  if (brands.length) {
+    results = results.filter((fridge) => brands.includes(fridge.brand));
   }
-});
 
-// Get a specific fridge
-app.get('/fridges/:id', async (req, res) => {
-  try {
-    const fridge = await Fridge.findById(req.params.id);
-    if (!fridge) {
-      return res.status(404).json({ message: 'Fridge not found' });
-    }
-    res.json(fridge);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  if (priceFrom) {
+    results = results.filter((fridge) => fridge.price >= priceFrom);
   }
-});
 
-// Create a new fridge
-app.post('/fridges', async (req, res) => {
-  try {
-    const newFridge = await Fridge.create(req.body);
-    res.status(201).json(newFridge);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
+  if (priceTo) {
+    results = results.filter((fridge) => fridge.price <= priceTo);
   }
-});
 
-// Update a specific fridge
-app.put('/fridges/:id', async (req, res) => {
-  try {
-    const updatedFridge = await Fridge.updateById(req.params.id, req.body);
-    if (!updatedFridge) {
-      return res.status(404).json({ message: 'Fridge not found' });
-    }
-    res.json(updatedFridge);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  if (searchTerm) {
+    // Simulate full-text search (replace with actual implementation)
+    results = results.filter(
+      (fridge) =>
+        fridge.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        fridge.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        fridge.description.toLowerCase().includes(searchTerm.toLowerCase()),
+    );
   }
+
+  if (foundItem) {
+    res.json(foundItem);
+  } else {
+    res.status(404).json({ error: "Item not found" });
+  } 
+
+  res.json(results);
 });
 
-// Delete a specific fridge
-app.delete('/fridges/:id', async (req, res) => {
-  try {
-    await Fridge.deleteById(req.params.id);
-    res.status(204).send(); // No content response
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+
+// GET /brands
+app.get("/brands", async (req, res) => {
+  const brands = [...new Set(fridges.map((fridge) => fridge.brand))];
+  res.json(brands);
 });
 
-app.listen(3000, () => {
-  console.log('Server listening on port 3000');
-});
+
+app.listen(5000, () => console.log("Server listening on port 5000"));
