@@ -1,92 +1,99 @@
 const express = require('express');
-const cors = require('cors');
-const DataStore = require('js-data');
-const { v4: uuidv4 } = require('uuid');
-
+const sqlite3 = require('sqlite3').verbose();
 const app = express();
+const port = 3000;
 
-app.use(cors());
+// Middleware for parsing JSON bodies
 app.use(express.json());
 
-// Define Fridge model with properties and ID generation
-const store = new DataStore();
-const Fridge = store.define('Fridge', {
-  id: {
-    type: String,
-    default: uuidv4,
-  },
-  name: String,
-  brand: String,
-  color: String,
-  price: Number,
-});
+app.use(express.static('web-lab'));
 
-// Pre-populate with some initial data (optional)
-const initialFridges = [
-  { name: 'Samsung RF28H5000SG', brand: 'Samsung', color: 'Stainless Steel', price: 1599 },
-  { name: 'LG LFXS30766S/S', brand: 'LG', color: 'Black Stainless Steel', price: 2499 },
-];
-
-Fridge.create(initialFridges)
-  .then(() => console.log('Initial fridges added'))
-  .catch((error) => console.error(error));
-
-// Get all fridges
-app.get('/fridges', async (req, res) => {
-  try {
-    const fridges = await Fridge.findAll();
-    res.json(fridges);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+// Connect to SQLite database
+const db = new sqlite3.Database(':memory:', (err) => {
+  if (err) {
+    return console.error(err.message);
   }
+  console.log('Connected to the in-memory SQlite database.');
 });
 
-// Get a specific fridge
-app.get('/fridges/:id', async (req, res) => {
-  try {
-    const fridge = await Fridge.findById(req.params.id);
-    if (!fridge) {
-      return res.status(404).json({ message: 'Fridge not found' });
+// Create fridges table
+db.run(`CREATE TABLE IF NOT EXISTS fridges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT,
+  brand TEXT,
+  price REAL
+)`);
+
+// CRUD API for fridges
+
+// CREATE a new fridge
+app.post('/api/fridges', (req, res) => {
+  const { name, description, brand, price } = req.body;
+  const sql = `INSERT INTO fridges (name, description, brand, price) VALUES (?, ?, ?, ?)`;
+  const params = [name, description, brand, price];
+  db.run(sql, params, function (err) {
+    if (err) {
+      res.status(400).json({ error: err.message });
+      return;
     }
-    res.json(fridge);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+    res.status(201).json({ id: this.lastID, name, description, brand, price });
+  });
 });
 
-// Create a new fridge
-app.post('/fridges', async (req, res) => {
-  try {
-    const newFridge = await Fridge.create(req.body);
-    res.status(201).json(newFridge);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
-});
-
-// Update a specific fridge
-app.put('/fridges/:id', async (req, res) => {
-  try {
-    const updatedFridge = await Fridge.updateById(req.params.id, req.body);
-    if (!updatedFridge) {
-      return res.status(404).json({ message: 'Fridge not found' });
+// READ all fridges
+app.get('/api/fridges', (req, res) => {
+  const sql = `SELECT * FROM fridges`;
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      res.status(400).json({ error: err.message });
+      return;
     }
-    res.json(updatedFridge);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+    res.json(rows);
+  });
 });
 
-// Delete a specific fridge
-app.delete('/fridges/:id', async (req, res) => {
-  try {
-    await Fridge.deleteById(req.params.id);
-    res.status(204).send(); // No content response
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+// READ a single fridge by id
+app.get('/api/fridges/:id', (req, res) => {
+  const sql = `SELECT * FROM fridges WHERE id = ?`;
+  const params = [req.params.id];
+  db.get(sql, params, (err, row) => {
+    if (err) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    res.json(row);
+  });
 });
 
-app.listen(3000, () => {
-  console.log('Server listening on port 3000');
+// UPDATE a fridge by id
+app.put('/api/fridges/:id', (req, res) => {
+  const { name, description, brand, price } = req.body;
+  const sql = `UPDATE fridges SET name = ?, description = ?, brand = ?, price = ? WHERE id = ?`;
+  const params = [name, description, brand, price, req.params.id];
+  db.run(sql, params, function (err) {
+    if (err) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    res.json({ id: req.params.id, name, description, brand, price });
+  });
+});
+
+// DELETE a fridge by id
+app.delete('/api/fridges/:id', (req, res) => {
+  const sql = `DELETE FROM fridges WHERE id = ?`;
+  const params = [req.params.id];
+  db.run(sql, params, function (err) {
+    if (err) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    res.status(204).send();
+  });
+});
+
+// Start the server
+app.listen(port, () => {
+  console.log(`Server listening at http://localhost:${port}`);
 });
